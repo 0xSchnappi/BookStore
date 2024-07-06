@@ -53,7 +53,7 @@ impl MigrationTrait for Migration {
     }
 }
 
-#[derive(DeriveIden)]
+#[derive(Iden)]
 pub enum Author {
     Table,
     Id,

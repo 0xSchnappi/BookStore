@@ -44,7 +44,7 @@ impl MigrationTrait for Migration {
     }
 }
 
-#[derive(DeriveIden)]
+#[derive(Iden)]
 pub enum User {
     // User为数据库表名
     Table, // 标识为数据库表
