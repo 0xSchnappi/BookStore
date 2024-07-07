@@ -11,9 +11,9 @@ use sea_orm::*;
 
 use super::{Response, SuccessResponse};
 
-use crate::{auth::AuthenticatedUser, controllers::ErrorResponse};
 use crate::entities::{prelude::*, user};
 use crate::AppConfig;
+use crate::{auth::AuthenticatedUser, controllers::ErrorResponse};
 
 #[derive(Deserialize)]
 #[serde(crate = "rocket::serde")]
@@ -127,13 +127,27 @@ pub async fn sigin_up(
     )))
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct ResMe {
+    id: i32,
+    email: String,
+    firstname: Option<String>,
+    lastname: Option<String>,
+}
+
 #[get("/me")]
-pub async fn me(
-    db: &State<DatabaseConnection>,
-    user: AuthenticatedUser
-) -> Response<String> {
+pub async fn me(db: &State<DatabaseConnection>, user: AuthenticatedUser) -> Response<Json<ResMe>> {
+    let db = db as &DatabaseConnection;
+    let u = User::find_by_id(user.id).one(db).await?.unwrap();
+
     Ok(SuccessResponse((
         Status::Ok,
-        "My user ID is: ".to_string() + user.id.to_string().as_str(),
+        Json(ResMe {
+            id: user.id,
+            email: u.email,
+            firstname: u.firstname,
+            lastname: u.lastname,
+        }),
     )))
 }

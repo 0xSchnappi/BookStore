@@ -1,26 +1,226 @@
-use super::Response;
+use rocket::{
+    futures::future::ok,
+    http::Status,
+    serde::{json::Json, Deserialize, Serialize},
+    State,
+};
+use sea_orm::{prelude::DateTimeUtc, *};
+use std::time::SystemTime;
+
+use super::{
+    books::{ResBook, ResBookList},
+    ErrorResponse, Response, SuccessResponse,
+};
+use crate::auth::AuthenticatedUser;
+use crate::entities::{author, book, prelude::*};
+
+#[derive(Serialize)]
+#[serde(crate = "rocket::serde")]
+pub struct ResAuthor {
+    id: i32,
+    firstname: String,
+    lastname: String,
+    bio: String,
+}
+
+#[derive(Serialize)]
+#[serde(crate = "rocket::serde")]
+pub struct ResAuthorList {
+    total: usize,
+    authors: Vec<ResAuthor>,
+}
+
+#[derive(Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct ReqAuthor {
+    firstname: String,
+    lastname: String,
+    bio: String,
+}
 
 #[get("/")]
-pub async fn index() -> Response<String> {
-    todo!()
+pub async fn index(db: &State<DatabaseConnection>) -> Response<Json<ResAuthorList>> {
+    let db = db as &DatabaseConnection;
+
+    let authors = Author::find()
+        .order_by_desc(author::Column::UpdatedAt)
+        .all(db)
+        .await?
+        .iter()
+        .map(|a| ResAuthor {
+            id: a.id,
+            firstname: a.firstname.to_owned(),
+            lastname: a.lastname.to_owned(),
+            bio: a.bio.to_owned(),
+        })
+        .collect::<Vec<_>>();
+
+    Ok(SuccessResponse((
+        Status::Ok,
+        Json(ResAuthorList {
+            total: authors.len(),
+            authors,
+        }),
+    )))
 }
 
-#[post("/")]
-pub async fn create() -> Response<String> {
-    todo!()
+#[post("/", data = "<req_author>")]
+pub async fn create(
+    db: &State<DatabaseConnection>,
+    user: AuthenticatedUser,
+    req_author: Json<ReqAuthor>,
+) -> Response<Json<ResAuthor>> {
+    let db = db as &DatabaseConnection;
+
+    let author = author::ActiveModel {
+        user_id: Set(user.id),
+        firstname: Set(req_author.firstname.to_owned()),
+        lastname: Set(req_author.lastname.to_owned()),
+        bio: Set(req_author.bio.to_owned()),
+        ..Default::default()
+    };
+
+    let author = author.insert(db).await?;
+
+    Ok(SuccessResponse((
+        Status::Created,
+        Json(ResAuthor {
+            id: author.id,
+            firstname: author.firstname,
+            lastname: author.lastname,
+            bio: author.bio,
+        }),
+    )))
 }
 
-// #[get("/<id>")]
-// pub async fn show() -> Response<String> {
-//     todo!()
-// }
+#[get("/<id>")]
+pub async fn show(
+    db: &State<DatabaseConnection>,
+    _user: AuthenticatedUser,
+    id: i32,
+) -> Response<Json<ResAuthor>> {
+    let db = db as &DatabaseConnection;
 
-// #[put("/<id>")]
-// pub async fn update() -> Response<String> {
-//     todo!()
-// }
+    let author = Author::find_by_id(id).one(db).await?;
 
-#[delete("/")]
-pub async fn delete() -> Response<String> {
-    todo!()
+    let author = match author {
+        Some(author) => author,
+        None => {
+            return Err(ErrorResponse((
+                Status::NotFound,
+                "Cannot find a Author with the specified ID.".to_string(),
+            )));
+        }
+    };
+
+    Ok(SuccessResponse((
+        Status::Ok,
+        Json(ResAuthor {
+            id: author.id,
+            firstname: author.firstname.to_owned(),
+            lastname: author.lastname.to_owned(),
+            bio: author.bio.to_owned(),
+        }),
+    )))
+}
+
+#[put("/<id>", data = "<req_author>")]
+pub async fn update(
+    db: &State<DatabaseConnection>,
+    _user: AuthenticatedUser,
+    id: i32,
+    req_author: Json<ReqAuthor>,
+) -> Response<Json<ResAuthor>> {
+    let db = db as &DatabaseConnection;
+
+    let author = Author::find_by_id(id).one(db).await?;
+
+    let mut author: author::ActiveModel = match author {
+        Some(a) => a.into(),
+        None => {
+            return Err(ErrorResponse((
+                Status::NotFound,
+                "No author with the specified ID.".to_string(),
+            )));
+        }
+    };
+
+    author.firstname = Set(req_author.firstname.to_owned());
+    author.lastname = Set(req_author.lastname.to_owned());
+    author.bio = Set(req_author.bio.to_owned());
+
+    author.updated_at = Set(Some((DateTimeUtc::from(SystemTime::now()))));
+
+    let author = author.update(db).await?;
+
+    Ok(SuccessResponse((
+        Status::Ok,
+        Json(ResAuthor {
+            id: author.id,
+            firstname: author.firstname.to_owned(),
+            lastname: author.lastname.to_owned(),
+            bio: author.bio.to_owned(),
+        }),
+    )))
+}
+
+#[delete("/<id>")]
+pub async fn delete(
+    db: &State<DatabaseConnection>,
+    _user: AuthenticatedUser,
+    id: i32,
+) -> Response<String> {
+    let db = db as &DatabaseConnection;
+
+    let author = match Author::find_by_id(id).one(db).await? {
+        Some(a) => a,
+        None => {
+            return Err(ErrorResponse((
+                Status::NotFound,
+                "No authors with the specified ID.".to_string(),
+            )));
+        }
+    };
+
+    author.delete(db).await?;
+
+    Ok(SuccessResponse((Status::Ok, "Author deleted.".to_string())))
+}
+
+#[get("/<id>/books")]
+pub async fn get_books(
+    db: &State<DatabaseConnection>,
+    _user: AuthenticatedUser,
+    id: i32,
+) -> Response<Json<ResBookList>> {
+    let db = db as &DatabaseConnection;
+
+    let author = match Author::find_by_id(id).one(db).await? {
+        Some(a) => a,
+        None => {
+            return Err(ErrorResponse((
+                Status::NotFound,
+                "No author found with the specified ID.".to_string(),
+            )));
+        }
+    };
+
+    let books: Vec<book::Model> = author.find_related(Book).all(db).await?;
+
+    Ok(SuccessResponse((
+        Status::Ok,
+        Json(ResBookList {
+            total: books.len(),
+            books: books
+                .iter()
+                .map(|b| ResBook {
+                    id: b.id,
+                    author_id: b.author_id,
+                    title: b.title.to_owned(),
+                    year: b.year.to_owned(),
+                    cover: b.cover.to_owned(),
+                })
+                .collect::<Vec<_>>(),
+        }),
+    )))
 }

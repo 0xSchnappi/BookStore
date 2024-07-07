@@ -8,8 +8,8 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub user_id: i32,
-    pub firstname: Option<String>,
-    pub lastname: Option<String>,
+    pub firstname: String,
+    pub lastname: String,
     pub bio: String,
     pub created_at: Option<DateTimeUtc>,
     pub updated_at: Option<DateTimeUtc>,
