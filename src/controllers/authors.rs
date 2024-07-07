@@ -23,6 +23,17 @@ pub struct ResAuthor {
     bio: String,
 }
 
+impl From<&author::Model> for ResAuthor {
+    fn from(value: &author::Model) -> Self {
+        Self {
+            id: value.id,
+            firstname: value.firstname.to_owned(),
+            lastname: value.lastname.to_owned(),
+            bio: value.bio.to_owned(),
+        }
+    }
+}
+
 #[derive(Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct ResAuthorList {
@@ -47,12 +58,7 @@ pub async fn index(db: &State<DatabaseConnection>) -> Response<Json<ResAuthorLis
         .all(db)
         .await?
         .iter()
-        .map(|a| ResAuthor {
-            id: a.id,
-            firstname: a.firstname.to_owned(),
-            lastname: a.lastname.to_owned(),
-            bio: a.bio.to_owned(),
-        })
+        .map(ResAuthor::from)
         .collect::<Vec<_>>();
 
     Ok(SuccessResponse((
@@ -84,12 +90,7 @@ pub async fn create(
 
     Ok(SuccessResponse((
         Status::Created,
-        Json(ResAuthor {
-            id: author.id,
-            firstname: author.firstname,
-            lastname: author.lastname,
-            bio: author.bio,
-        }),
+        Json(ResAuthor::from(&author)),
     )))
 }
 
@@ -115,12 +116,7 @@ pub async fn show(
 
     Ok(SuccessResponse((
         Status::Ok,
-        Json(ResAuthor {
-            id: author.id,
-            firstname: author.firstname.to_owned(),
-            lastname: author.lastname.to_owned(),
-            bio: author.bio.to_owned(),
-        }),
+        Json(ResAuthor::from(&author)),
     )))
 }
 
@@ -155,12 +151,7 @@ pub async fn update(
 
     Ok(SuccessResponse((
         Status::Ok,
-        Json(ResAuthor {
-            id: author.id,
-            firstname: author.firstname.to_owned(),
-            lastname: author.lastname.to_owned(),
-            bio: author.bio.to_owned(),
-        }),
+        Json(ResAuthor::from(&author)),
     )))
 }
 
@@ -211,16 +202,7 @@ pub async fn get_books(
         Status::Ok,
         Json(ResBookList {
             total: books.len(),
-            books: books
-                .iter()
-                .map(|b| ResBook {
-                    id: b.id,
-                    author_id: b.author_id,
-                    title: b.title.to_owned(),
-                    year: b.year.to_owned(),
-                    cover: b.cover.to_owned(),
-                })
-                .collect::<Vec<_>>(),
+            books: books.iter().map(ResBook::from).collect::<Vec<_>>(),
         }),
     )))
 }
