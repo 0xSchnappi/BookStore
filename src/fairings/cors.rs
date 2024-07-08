@@ -1,5 +1,4 @@
 use rocket::{fairing::{Fairing, Info, Kind}, http:: Header, Request, Response};
-use rocket_client_addr::ClientAddr;
 pub struct CORS;
 
 #[rocket::async_trait]
@@ -20,7 +19,6 @@ impl Fairing for CORS {
 }
 
 #[options("/<_..>")]
-pub fn options(client_addr: &ClientAddr)-> &'static str{
-    println!("攻击者ip:{}", client_addr.get_ipv4_string().unwrap());
+pub fn options()-> &'static str{
     "hello rust"
 }
